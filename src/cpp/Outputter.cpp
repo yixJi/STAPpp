@@ -57,18 +57,24 @@ COutputter* COutputter::GetInstance(string FileName)
 //	Print program logo
 void COutputter::OutputHeading()
 {
-	CDomain* FEMData = CDomain::GetInstance();
+    CDomain* FEMData = CDomain::GetInstance();
 
-	*this << "TITLE : " << FEMData->GetTitle() << endl;
+    *this << "TITLE : " << FEMData->GetTitle() << std::endl;
+    time_t rawtime{};
+    std::time(&rawtime);
 
-	time_t rawtime;
-	struct tm* timeinfo;
+    std::tm timeinfo{};        
 
-	time(&rawtime);
-	timeinfo = localtime(&rawtime);
+#ifdef _MSC_VER    
+    localtime_s(&timeinfo, &rawtime);
+#else
+    localtime_r(&rawtime, &timeinfo);
+#endif
+    // ----------------------------------------------------------------------
 
-	PrintTime(timeinfo, *this);
+    PrintTime(&timeinfo, *this);
 }
+
 
 //	Print nodal data
 void COutputter::OutputNodeInfo()
@@ -161,6 +167,9 @@ void COutputter::OutputElementInfo()
 			case ElementTypes::Bar: // Bar element
 				OutputBarElements(EleGrp);
 				break;
+			case ElementTypes::Q4: // 3T element
+				OutputQ4Elements(EleGrp);
+				break;
 		    default:
 		        *this << ElementType << " has not been implemented yet." << endl;
 		        break;
@@ -213,6 +222,41 @@ void COutputter::OutputBarElements(unsigned int EleGrp)
 	*this << endl;
 }
 
+void COutputter::OutputQ4Elements(unsigned int EleGrp)
+{
+    CDomain* FEMData = CDomain::GetInstance();
+    CElementGroup& ElementGroup = FEMData->GetEleGrpList()[EleGrp];
+    unsigned int NUMMAT = ElementGroup.GetNUMMAT();
+
+    *this << " M A T E R I A L   D E F I N I T I O N" << endl << endl;
+    *this << " NUMBER OF DIFFERENT MATERIAL SETS . . . . . . . . =" << setw(5) << NUMMAT << endl << endl;
+
+    *this << "  SET       YOUNG'S     POISSON RATIO      THICKNESS" << endl;
+    *this << " NUMBER     MODULUS           v" << endl;
+    *this << "               E                                t" << endl;
+
+    *this << setiosflags(ios::scientific) << setprecision(5);
+
+    for (unsigned int mset = 0; mset < NUMMAT; mset++)
+    {
+        *this << setw(5) << mset + 1;
+        ElementGroup.GetMaterial(mset).Write(*this); // CQ4Material::Write()
+    }
+
+    *this << endl << endl << " E L E M E N T   I N F O R M A T I O N" << endl;
+    *this << " ELEMENT     NODE     NODE     NODE     NODE    MATERIAL" << endl;
+    *this << " NUMBER-N      I        J        K     L    SET NUMBER" << endl;
+
+    unsigned int NUME = ElementGroup.GetNUME();
+
+    for (unsigned int Ele = 0; Ele < NUME; Ele++)
+    {
+        *this << setw(5) << Ele + 1;
+        ElementGroup[Ele].Write(*this); // CQ4::Write()
+    }
+
+    *this << endl;
+} 
 //	Print load data
 void COutputter::OutputLoadInfo()
 {
@@ -260,49 +304,71 @@ void COutputter::OutputNodalDisplacement()
 //	Calculate stresses
 void COutputter::OutputElementStress()
 {
-	CDomain* FEMData = CDomain::GetInstance();
+    CDomain* FEMData      = CDomain::GetInstance();
+    double*  Displacement = FEMData->GetDisplacement();
+    unsigned NUMEG        = FEMData->GetNUMEG();
 
-	double* Displacement = FEMData->GetDisplacement();
+    for (unsigned EleGrpIndex = 0; EleGrpIndex < NUMEG; ++EleGrpIndex)
+    {
+        *this << " S T R E S S  C A L C U L A T I O N S  F O R  E L E M E N T  G R O U P"
+              << setw(5) << EleGrpIndex + 1 << '\n' << '\n';
 
-	unsigned int NUMEG = FEMData->GetNUMEG();
+        CElementGroup& EleGrp   = FEMData->GetEleGrpList()[EleGrpIndex];
+        unsigned       NUME     = EleGrp.GetNUME();
+        ElementTypes   ElemType = EleGrp.GetElementType();
 
-	for (unsigned int EleGrpIndex = 0; EleGrpIndex < NUMEG; EleGrpIndex++)
-	{
-		*this << " S T R E S S  C A L C U L A T I O N S  F O R  E L E M E N T  G R O U P" << setw(5)
-			  << EleGrpIndex + 1 << endl
-			  << endl;
+        switch (ElemType)
+        {
+        /* ---------------- Bar element : original format ---------------- */
+        case ElementTypes::Bar:
+        {
+            *this << "  ELEMENT             FORCE            STRESS\n"
+                  << "  NUMBER\n";
 
-		CElementGroup& EleGrp = FEMData->GetEleGrpList()[EleGrpIndex];
-		unsigned int NUME = EleGrp.GetNUME();
-		ElementTypes ElementType = EleGrp.GetElementType();
+            double stress;
+            for (unsigned e = 0; e < NUME; ++e)
+            {
+                CElement&       Elem     = EleGrp[e];
+                Elem.ElementStress(&stress, Displacement);
 
-		switch (ElementType)
-		{
-			case ElementTypes::Bar: // Bar element
-				*this << "  ELEMENT             FORCE            STRESS" << endl
-					<< "  NUMBER" << endl;
+                CBarMaterial&   matBar   = *dynamic_cast<CBarMaterial*>(Elem.GetElementMaterial());
 
-				double stress;
+                *this << setw(5) << e + 1
+                      << setw(22) << stress * matBar.Area
+                      << setw(18) << stress << '\n';
+            }
+            *this << '\n';
+            break;
+        }
 
-				for (unsigned int Ele = 0; Ele < NUME; Ele++)
-				{
-					CElement& Element = EleGrp[Ele];
-					Element.ElementStress(&stress, Displacement);
+        /* ---------------- Q4 element : σx  σy  τxy -------------------- */
+        case ElementTypes::Q4:
+        {
+            *this << "  ELEMENT          SIGMA_X(Pa)        SIGMA_Y(Pa)         TAU_XY(Pa)\n";
 
-					CBarMaterial& material = *dynamic_cast<CBarMaterial*>(Element.GetElementMaterial());
-					*this << setw(5) << Ele + 1 << setw(22) << stress * material.Area << setw(18)
-						<< stress << endl;
-				}
+            double stress[3];   /* {σx, σy, τxy} */
 
-				*this << endl;
+            for (unsigned e = 0; e < NUME; ++e)
+            {
+                CElement& Elem = EleGrp[e];
+                Elem.ElementStress(stress, Displacement);   /* evaluates at centre */
 
-				break;
+                /* thickness not needed for stress itself; included only if you
+                   want resultant force per unit width:  stress[i] * t */
+                *this << setw(8)  << e + 1
+                      << setw(18) << std::scientific << stress[0]
+                      << setw(18) << std::scientific << stress[1]
+                      << setw(18) << std::scientific << stress[2] << '\n';
+            }
+            *this << '\n';
+            break;
+        }
 
-			default: // Invalid element type
-				cerr << "*** Error *** Elment type " << ElementType
-					<< " has not been implemented.\n\n";
-		}
-	}
+        default:   /* unsupported element */
+            cerr << "*** Error *** element type " << ElemType
+                 << " not implemented.\n\n";
+        }
+    }
 }
 
 //	Print total system data

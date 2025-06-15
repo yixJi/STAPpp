@@ -52,3 +52,17 @@ public:
 //!	Write material data to Stream
 	virtual void Write(COutputter& output);
 };
+
+class CQ4Material : public CMaterial
+{
+public:
+
+	double nu;
+	
+	double thickness; //!< Thickness of a Q4 element
+public:
+//!	Read material data from stream Input
+	virtual bool Read(ifstream& Input);
+//!	Write material data to Stream
+	virtual void Write(COutputter& output);
+};

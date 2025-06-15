@@ -16,16 +16,16 @@
 #include "Bar.h"
 #include "Material.h"
 #include "Node.h"
-
+#include "Q4.h"
 using namespace std;
 
 //! Define set of element types
 enum ElementTypes
 {
     UNDEFINED = 0,
-    Bar,    // Bar element
-    Q4,     // 4Q element
-    T3,     // 3T element
+    Bar=1,    // Bar element
+    Q4=2,     // 4Q element
+    T3=3,     // 3T element
     H8,     // 8H element
     Beam,   // Beam element
     Plate,  // Plate element

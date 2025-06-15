@@ -75,7 +75,7 @@ public:
     virtual unsigned int SizeOfStiffnessMatrix()
     {
         unsigned int size = 0;
-        for (int i=1; i<= ND_; i++)
+        for (unsigned int i=1; i<= ND_; i++)
             size += i;
         
         return size;

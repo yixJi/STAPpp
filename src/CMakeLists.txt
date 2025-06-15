@@ -1,7 +1,11 @@
+cmake_minimum_required(VERSION 3.10)
 PROJECT(stap++)
-
-cmake_minimum_required(VERSION 3.1)
 set (CMAKE_CXX_STANDARD 11)
+
+if (MSVC)
+   add_compile_options("$<$<CXX_COMPILER_ID:MSVC>:/source-charset:utf-8>")
+   add_compile_options("$<$<CXX_COMPILER_ID:MSVC>:/execution-charset:utf-8>")
+endif()
 
 OPTION(STAP++_DEBUG "Output detailed results for debugging." OFF)
 IF(STAP++_DEBUG)

@@ -1,0 +1,27 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "调试STAP++",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/Debug/stap++.exe",
+            "args": [
+                "${input:programArgs}"
+            ],
+            "stopAtEntry": false,
+            "cwd": "${fileDirname}",
+            "environment": [],
+            // "externalConsole": false,
+            "preLaunchTask": "Build STAP++"
+        }
+    ],
+    "inputs": [
+        {
+            "id": "programArgs",
+            "type": "promptString",
+            "description": "请输入程序参数（用空格分隔）",
+            "default": ""
+        }
+    ]
+}
